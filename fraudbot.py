@@ -5,7 +5,7 @@ import requests
 import pymorphy2
 from itertools import product
 
-TOKEN = "BOT_TOKEN"
+TOKEN = "Njk0OTMzMDExNjYxMDYyMTg2.Xp24FQ.pAN_5_BJGmDKpNTNsrpLLdR4ktA"
 
 
 # база, в которой будут храниться заработанные очки и статус отношений бота с пользователем - играет оно и во что,
@@ -84,15 +84,16 @@ class Fraudbot(discord.Client):
                 '/крестики-нолики - классические крестики-нолики с 3 уровнями сложности\n' \
                 '/сапер - классический сапер, размер поля варьируется от 5 на 5, до 26 на 26 клеток\n' \
                 '/камень-ножницы-бумага - классические... камень-ножницы-бумага!\n' \
-                '/кости - вы должны будете выбросить кости больше чем у вашего противника - бота\n\n' \
+                '/кости - вы делаете ставки на сумму выброшенных ботом костей\n\n' \
                 'Более подробные правила игр описаны внутри каждой из них. Пусть Фортуна будет благосклонна' \
                 ' к вам!'
         # это база откуда мы будем брать реакции на разные фразы.
         self.dialog_base = {'/игры': 'Вот список моих игр: \n' + games,
-                            '/помощь': 'помощь. создается.',
-                            '/старт': 'Привет! Я игровой бот! Могу сыграть с вами в различные игры. Наберите "/игры" '
-                                      'и я покажу, какие игры у  меня есть! Кроме того, у меня есть команда "/помощь".'
-                                      ' Попробуйте ее ввести!'}
+                            '/привет': 'Здравствуйте! Я Fraudbot. Я представляю математические игры, то есть игры,'
+                                       ' где используется математическое мышление. Команда "/игры" -- '
+                                       'здесь описаны мои игры и команды для их вызова.\n',
+                            '/помощь': 'Если у вас возник вопрос, или у вас есть какая-то идея -- пишите на адрес '
+                                       'fraudbot.help@mail.ru'}
 
     async def on_message(self, message):
         # не даем отвечать самому себе
@@ -105,6 +106,14 @@ class Fraudbot(discord.Client):
             for i in self.dialog_base:
                 if message.content == i:
                     await message.channel.send(self.dialog_base[i])
+        else:
+            # если пользователь не "свободен" от наших игр или диалога, то мы не даем еще раз запустить цикл
+            return
+
+        def check(m):
+            # проверяем, что точно сообщение от нашего игрока и что он не случайно нажала enter
+            return len(m.content) != 0 and m.author == user_gambler
+
         if message.content == '/быки и коровы':
             await self.db_edit(message.author.name + message.author.discriminator, 'bnc')
             # это нужно, чтобы отслеживать сообщения именно от данного пользователя
@@ -133,10 +142,6 @@ class Fraudbot(discord.Client):
                                                                   '\nЕсли вы '
                                                                   'пожелаете прекратить игру, то в любой'
                                                                   ' момент введите команду "/стоп"')
-
-            def check(m):
-                # проверяем, что точно сообщение от нашего игрока и что он не случайно нажала enter
-                return len(m.content) != 0 and m.author == user_gambler
 
             async def bnc_user_input(history=None):
                 # пользовательский ввод для игры быки и коровы
@@ -311,9 +316,134 @@ class Fraudbot(discord.Client):
                             playing = 2
                         player_turn = True
                 if playing != -1:
-                    await message.channel.send('Спасибо за игру! Приходите еще!')
+                    await message.channel.send('Спасибо за игру! Заходите еще!')
                 else:
                     await message.channel.send('Игра окончена.')
+            await self.db_edit(user_gambler.name + user_gambler.discriminator, 'empty')
+        elif message.content == '/кости':
+            await self.db_edit(message.author.name + message.author.discriminator, 'dices')
+            # это нужно, чтобы отслеживать сообщения именно от данного пользователя
+            user_gambler = message.author
+            user_player = str(user_gambler)
+            await message.channel.send('Хорошо, ' + user_player + '! Правила таковы -- у вас ровно 100 монет. Вам нужно'
+                                                                  ' увеличить их количество. На каждый бросок можно с'
+                                                                  'делать ставку, от 5 до 20 монет. Ставка делается '
+                                                                  'на сумму цифр, которые будет на верхн(их/ей) гран(я'
+                                                                  'х/и) кост(ей/и) после броска. Также вы можете '
+                                                                  'выбрать какие кости будете бросать. Кости каждый р'
+                                                                  'аз выбираются случайно, из следующих вариантов:'
+                                                                  '\n\tодна шестигранная кость, коэффициент ставки - 3.'
+                                                                  '\n\tдве шестигранные кости коэффициент ставки - 6'
+                                                                  '\n\tодна восьмигранная кость, коэффициент ставки - '
+                                                                  '4\n\tдве восьмигранные кости, коэффициент ставки - '
+                                                                  '8\n\tодна двадцатигранная кость,'
+                                                                  ' кожффициент ставки - 10\nТакже вам всегда будет д'
+                                                                  'оступна моентка со стабильным коэффициентом 2.\n'
+                                                                  'Коэффициент ставки - это то число, на которое '
+                                                                  'будет умножена ваша ставка. При проигрыше у вас '
+                                                                  'вычтут вашу ставку. Но есть одно условие - ,'
+                                                                  ' все коэффициенты, кроме стабильного, варируются'
+                                                                  ' от 2 до самих себя.\nЕсли вы будете'
+                                                                  ' играть, то выберите число, которого хотите '
+                                                                  'достигнуть, из нижеперечисленных. В противном случ'
+                                                                  'ае, напишите команду "/стоп"\n'
+                                                                  '200  |  300  |  500  |  1000  |  /стоп')
+            choice = await self.wait_for('message', check=check)
+            while choice.content not in ('200', '300', '/стоп', '500', '1000'):
+                await message.channel.send(user_player + ', чтобы ответить,'
+                                                         ' введите один из следующих вариантов: \n200\n300\n500\n100'
+                                                         '0\n/стоп')
+                choice = await self.wait_for('message', check=check)
+            if choice.content == '/стоп':
+                # игрок отказался играть. В конце блока игры его статус автоматически поменяется.
+                pass
+            else:
+                start_cash = 100
+                end_cash = int(choice.content)
+                dash_set = {'один шестигранник': 3,
+                            'два шестигранника': 6,
+                            'один восьмигранник': 4,
+                            'два восьмигранника': 8,
+                            'один двадцатигранник': 10}
+                values = {'один шестигранник': range(1, 7),
+                          'два шестигранника': range(2, 13),
+                          'один восьмигранник': range(1, 9),
+                          'два восьмигранника': range(2, 17),
+                          'один двадцатигранник': range(1, 21),
+                          'монета': range(1, 3)}
+                d2_used = False
+                while start_cash != 0 or start_cash != end_cash:
+                    random.seed(random.randint(10 ** 10, 10 ** 20))
+                    cur_set = [random.choice([d for d in dash_set.keys()]) for _ in range(2)]
+                    for i in range(len(cur_set)):
+                        while cur_set.count(cur_set[i]) > 1:
+                            del cur_set[i]
+                            cur_set.append(random.choice([d for d in dash_set.keys()]))
+                        cur_set[i] = f'{i + 1}){cur_set[i]} -- {str(random.randint(2, dash_set[cur_set[i]]))}'
+                    if not d2_used:
+                        cur_set.append('3)монета -- 2')
+                    else:
+                        d2_used = False
+                    await message.channel.send(user_player + f'. Ваши монеты: {start_cash}, осталось набрать ещё '
+                                                             f'{end_cash - start_cash} монет.\n Вы можете кинуть '
+                                                             f'следующие кости:\n\t' + '\n\t'.join(cur_set)
+                                               + '\nМожно ввести или наименование варианта, или его номер.')
+                    user_move = await self.wait_for('message', check=check)
+                    while all([user_move.content != c.split(' -- ')[0][2:] for
+                               c in cur_set]) and user_move.content not in ['1', '2', '3'] + ['/стоп']:
+                        await message.channel.send(user_player + ', чтобы ответить, введите наименование одного из'
+                                                                 ' следующих вариантов:\n\t' + '\n\t'.join(cur_set) +
+                                                   '\nили номер варианта, от 1 до 3.\nТакже вы можете прервать игру'
+                                                   ' командой "/стоп"')
+                        user_move = await self.wait_for('message', check=check)
+                    dice = user_move.content
+                    if dice == '/стоп':
+                        break
+                    if dice not in ['1', '2', '3']:
+                        dice = str([d.split(' -- ')[0][2:] == dice for d in cur_set].index(True) + 1)
+                    if dice == '3':
+                        d2_used = True
+                    coefficient = int(cur_set[int(dice) - 1][-1])
+                    await message.channel.send(user_player + ', теперь выберите число, на которое будете делать ставку.'
+                                                             ' Число не может превышать максимальную сумму цифр костей'
+                                                             ', или быть меньше 1 (или 2 если костей две).')
+                    digit = await self.wait_for('message', check=check)
+                    sums = [str(b) for b in values[cur_set[int(dice) - 1].split(' -- ')[0][2:]]]
+                    while digit.content not in sums and digit.content != '/стоп':
+                        await message.channel.send(user_player + ', выберите число, на которое будете делать ставку.'
+                                                                 ' Введите любое число из следуюших:  ' +
+                                                   ',  '.join(sums) + '\nТакже вы можете прервать игру командой '
+                                                                      '"/стоп"')
+                        digit = await self.wait_for('message', check=check)
+                    if digit.content == '/стоп':
+                        break
+                    await message.channel.send(f'Отлично, {user_player}, а теперь введите ставку. Ставкой может быть '
+                                               f'любое число от 5 до 20 включительно.')
+                    bet = await self.wait_for('message', check=check)
+                    while bet.content not in [str(b) for b in range(5, 21)] and bet.content != '/стоп':
+                        await message.channel.send(user_player + ', введите ставку. Ставкой может быть любое число из'
+                                                                 ' следующих: ' + ', '.join([str(g) for g in
+                                                                                             range(5, 21)]))
+                        bet = await self.wait_for('message', check=check)
+                    if bet.content == '/стоп':
+                        break
+                    cast = random.choice(sums)
+                    await message.channel.send(f'{user_player}, вы сделали ставку {bet.content} монет на число '
+                                               f'{digit.content}. Бот бросает кости...\nИ выбрасывает число'
+                                               f' {cast}.')
+                    if digit.content != cast:
+                        await message.channel.send(f'Жаль, {user_player}, вы не угадали и лишились {bet.content} монет.')
+                        start_cash -= int(bet.content)
+                    else:
+                        await message.channel.send(f'Вы угадали, {user_player}! Ваш выигрыш составляет '
+                                                   f'{coefficient * int(bet.content)} монет(а).')
+                        start_cash += coefficient * int(bet.content)
+                if start_cash <= 0:
+                    await message.channel.send(f'Вы проиграли, {user_player}. Но это не повод для огорчения,'
+                                               f' ведь смысл этой игры не в победах или поражениях, а в самой игре.'
+                                               f' Каждый проигрыш или победа чему-то учат.')
+                if start_cash == end_cash:
+                    await message.channel.send(f'Поздравляю, {user_player}, вы победили! Заходите еще!')
             await self.db_edit(user_gambler.name + user_gambler.discriminator, 'empty')
 
     async def db_edit(self, user_id, status):
@@ -321,7 +451,7 @@ class Fraudbot(discord.Client):
         cur = self.con.cursor()
         user = cur.execute("Select * from users WHERE user_id=?", (user_id,)).fetchone()
         if user is None:
-            cur.execute('INSERT INTO users(user_id, points, state) VALUES(?, ?, ?)', (str(user_id), '0', status))
+            cur.execute('INSERT INTO users(user_id, state) VALUES(?, ?)', (str(user_id), status))
         else:
             cur.execute('UPDATE users SET state = "' + status + '" WHERE user_id = "' + str(user_id) + '"')
         self.con.commit()
@@ -332,7 +462,7 @@ class Fraudbot(discord.Client):
         user = cur.execute("Select * from users WHERE user_id=?", (user_id,)).fetchone()
         if user is None:
             return 'empty'
-        return user[2]
+        return user[1]
 
     async def on_ready(self):
         cur = self.con.cursor()
