@@ -4,7 +4,6 @@ import random
 import requests
 import pymorphy2
 from itertools import product
-TOKEN = "Njk0OTMzMDExNjYxMDYyMTg2.Xp24FQ.pAN_5_BJGmDKpNTNsrpLLdR4ktA"
 # база, в которой будут храниться заработанные очки и статус отношений бота с пользователем - играет оно и во что,
 # или просто общается
 
@@ -547,4 +546,4 @@ class Fraudbot(discord.Client):
 
 
 client = Fraudbot()
-client.run(TOKEN)
+client.run(open('token.txt', 'r').readline())
