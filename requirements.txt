@@ -1,6 +1,3 @@
-sqlite3
+SQLAlchemy
 pymorphy2
 discord.py
-requests
-random
-itertools
