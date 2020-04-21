@@ -1,0 +1,6 @@
+sqlite3
+pymorphy2
+discord.py
+requests
+random
+itertools
