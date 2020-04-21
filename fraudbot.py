@@ -4,7 +4,7 @@ import random
 import requests
 import pymorphy2
 from itertools import product
-TOKEN = "BOT_TOKEN"
+TOKEN = "Njk0OTMzMDExNjYxMDYyMTg2.Xp24FQ.pAN_5_BJGmDKpNTNsrpLLdR4ktA"
 # база, в которой будут храниться заработанные очки и статус отношений бота с пользователем - играет оно и во что,
 # или просто общается
 
