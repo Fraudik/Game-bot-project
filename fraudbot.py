@@ -12,15 +12,19 @@ class Bnc:
     def __init__(self):
         random.seed(self.generate_answer())
         self.attempt = self.k = 0
+        # создаем список всех возможных чисел.
         self.everything = ["".join(x) for x in product('0123456789', repeat=4)
                            if len(set(x)) == len(x)]
         self.answer = self.generate_answer()
+        # таким образом мы еще и перемешиваем все числа. кроме того, из массива их удобнее удалять.
         self.guess_space = set(self.everything)
+        # здесь храним историю попыток бота.
         self.historys = []
+        # а здесь храним историю попыток игрока.
         self.history = []
-        self.digitals = []
 
     def is_compatible(self, guess):
+        # проверка на то, подходит ли нам это число, на основе всех предыдущих попыток.
         return all(self.bulls_n_cows(guess, previous_guess) == (bulls, cows)
                    for previous_guess, bulls, cows in self.historys)
 
@@ -33,6 +37,7 @@ class Bnc:
 
     @staticmethod
     def bulls_n_cows_morph(bulls, cows):
+        # возвращает быков и коров в более удобной форме для передачи игроку.
         morph = pymorphy2.MorphAnalyzer()
         cows = str(cows) + ' ' + morph.parse('корова')[0].make_agree_with_number(int(cows)).word
         bulls = str(bulls) + ' ' + morph.parse('бык')[0].make_agree_with_number(int(bulls)).word
@@ -48,25 +53,30 @@ class Bnc:
             number.append(str(a))
         return ''.join(number)
 
-    def cheat(self):
-        error = True
-        new_answer = None
-        while error:
-            new_answer = self.generate_answer()
-            while new_answer == self.answer:
-                new_answer = self.generate_answer()
-            else:
+    def cheat(self, player_try):
+        max_score = 0
+        best_answer = self.answer
+        for new_answer in self.everything:
+            score = 12.0
+            error = True
+            while error:
                 if self.history:
                     for i in self.history:
                         if self.bulls_n_cows(i[0], new_answer) != [i[1], i[2]]:
-                            error = True
-                            break
-                        else:
+                            score = 0
                             error = False
+                            break
+                        error = False
                 else:
-                    error = False
-        if not error:
-            self.answer = new_answer
+                    break
+            bulls, cows = self.bulls_n_cows(new_answer, player_try)
+            score -= bulls * 3 + cows
+            if bulls + cows == 0:
+                score -= 5.1
+            if max_score < score:
+                best_answer = new_answer
+                max_score = score
+        return best_answer
 
 
 class Fraudbot(discord.Client):
@@ -93,7 +103,7 @@ class Fraudbot(discord.Client):
                                        ' -- пишите на адрес fraudbot.help@mail.ru'}
         self.commands = ['/помощь', '/игры', '/привет'] + [g.split(' - ')[0] for g in games.split('\n')]
         # после перезапуска бот должен будет предупредить пользователей, что все их диалоги были прекращены.
-        self.reconnect = False
+        self.reconnect = {}
 
     async def on_message(self, message):
         # не даем отвечать самому себе
@@ -102,7 +112,7 @@ class Fraudbot(discord.Client):
         # user_gambler - объект класса Member и служит для проверки в функции check(m).
         user_gambler = message.author
         # user_player - идентификатор пользователя, нужен для обращения к нему и для занесения в базу.
-        user_player = str(user_gambler)
+        user_player = str(user_gambler).replace('#', '')
         # user_channel - канал, на котором был запущено общение.
         user_channel = message.channel
         # в базе данных лежит имя сервера и канал. если пользователь общается с ботом в личных сообщениях,
@@ -111,17 +121,15 @@ class Fraudbot(discord.Client):
             user_chan_guild = str(user_channel.guild.id) + str(user_channel.id)
         except AttributeError:
             user_chan_guild = str(user_channel.id)
-        # если бот был запущен первый раз, или перезапущен
+        # прекращает все взаимодействия с ботом по команде.
         if message.content == '/стоп':
             await self.db_edit(user_player, 'empty')
-            await message.channel.send(user_player + ', вы прервали все взаимодействия с ботом.')
-        if self.reconnect:
-            # это означает, что пользователь уже общался с ботом, а значит произошел перезапуск,
-            # а не первый запуск бота.
-            self.reconnect = False
-            if self.user_status(user_player) != 'None':
-                await message.channel.send(f'Извините, {user_player}, произошел перезапуск бота. Приносим извинения'
-                                           f' за причиненные неудобства, все диалоги были досрочно прекращены.')
+            await message.channel.send(user_player + ", вы прервали все взаимодействия с ботом.")
+        # если бот был запущен первый раз, или перезапущен
+        if user_player in self.reconnect and self.reconnect[user_player]:
+            # 1 условие проверяет, что пользователь уже общался с ботом
+            await message.channel.send(f"Извините, {user_player}, произошел перезапуск бота. Приносим извинения"
+                                       f" за причиненные неудобства. Все диалоги были досрочно прекращены.")
         # если пользователя нет в базе
         if self.user_status(user_player) == 'None':
             # поприветствуем нового пользователя и добавим его в базу. Добавление в базу происходит автоматически,
@@ -197,7 +205,7 @@ class Fraudbot(discord.Client):
                             # в f строке нельзя напрямую вызвать метод split() с аргументом '\n',
                             # поэтому аргументом будет служить переменная со значением '\n'
                             delimiter = '\n'
-                            history_read += f'\nПопытка {str(len(history_read.split(delimiter)) + 1)}.' \
+                            history_read += f'\nПопытка {str(len(history_read.split(delimiter)))}.' \
                                             f' Ваше число {str(p[0])} -- {b} и {c}.'
                         await message.channel.send(user_player + ', это история ваших попыток.' + history_read)
                     await message.channel.send(user_player + ', введите четырехзначное число'
@@ -246,7 +254,6 @@ class Fraudbot(discord.Client):
                                                                                       ' всего за ' + str(number)
                                                + ' ' +
                                                morph.parse('попытку')[0].make_agree_with_number(number).word + '.')
-                await message.channel.send('Игра окончена.')
             else:
                 await message.channel.send(user_player + ', вы играете против бота. Для того, чтобы решить,'
                                                          ' кто будет ходить первым, бот использует бинарную'
@@ -289,7 +296,7 @@ class Fraudbot(discord.Client):
                         # считаем быков и коров, и, если они подходят под условие, генерируем число заново,
                         # в связи с историей попыток.
                         if bulls_count >= 2 or cows_count >= 3 or bulls_count + cows_count in (4, 0):
-                            game.cheat()
+                            game.cheat(user_input)
                         bulls_count, cows_count = game.bulls_n_cows(user_input, game.answer)
                         # добавляем в историю попытку и ее результаты
                         game.history.append([user_input, bulls_count, cows_count])
@@ -318,7 +325,8 @@ class Fraudbot(discord.Client):
                         if playing != 0:
                             break
                         await message.channel.send(user_player + ', я думаю, что вы загадали число '
-                                                   + str(guess) + '\nВведите через пробел количество быков и коров.')
+                                                   + str(guess) + '\nВведите через пробел количество быков и коров.'
+                                                                  ' (например -- 0 2)')
                         bulls_n_cows = await self.wait_for('message', check=check)
                         bulls_n_cows = bulls_n_cows.content.split(' ')
                         while len(bulls_n_cows) != 2 or not all(j in [str(d) for d in range(0, 5)]
@@ -346,7 +354,7 @@ class Fraudbot(discord.Client):
                             break
                         game.historys.append((guess, int(bulls_n_cows[0]), int(bulls_n_cows[1])))
                         bulls, cows = game.bulls_n_cows_morph(bulls_n_cows[0], bulls_n_cows[1])
-                        await message.channel.send(user_player + f"\nМоя {len(game.history)} попытка. Мое число"
+                        await message.channel.send(user_player + f"\nМоя {len(game.history) + 1} попытка. Мое число"
                                                                  f" {guess}. У меня {bulls} и {cows}.")
                         if bulls_n_cows[0] == 4:
                             # бот победил
@@ -355,9 +363,10 @@ class Fraudbot(discord.Client):
                             playing = 2
                         player_turn = True
                 if playing != -1:
-                    await message.channel.send('Спасибо за игру! Заходите еще!')
-                else:
-                    await message.channel.send('Игра окончена.')
+                    await message.channel.send('Спасибо за игру! Если вы желаете еще поиграть --'
+                                               ' введите команду "/игры".')
+            await message.channel.send(f'Игра окончена, {user_player}. Если желаете еще раз сыграть в эту или'
+                                       f' иную игру -- введите команду "/игры".')
         # запуск игры "Кости"
         elif message.content == '/кости':
             # изменение статуса.
@@ -375,7 +384,7 @@ class Fraudbot(discord.Client):
                                                                   '\n\tодна восьмигранная кость, коэффициент ставки - '
                                                                   '4\n\tдве восьмигранные кости, коэффициент ставки - '
                                                                   '8\n\tодна двадцатигранная кость,'
-                                                                  ' кожффициент ставки - 10\nТакже вам всегда будет д'
+                                                                  ' коэффициент ставки - 10\nТакже вам всегда будет д'
                                                                   'оступна моентка со стабильным коэффициентом 2.\n'
                                                                   'Коэффициент ставки - это то число, на которое '
                                                                   'будет умножена ваша ставка. При проигрыше у вас '
@@ -496,14 +505,15 @@ class Fraudbot(discord.Client):
                                                f' ведь смысл этой игры не в победах или поражениях, а в самой игре.'
                                                f' Каждый проигрыш или победа чему-то учат.')
                 if start_cash == end_cash:
-                    await message.channel.send(f'Поздравляю, {user_player}, вы победили! Заходите еще!')
+                    await message.channel.send(f'Поздравляю, {user_player}, вы победили!')
+                await message.channel.send(f'Игра окончена, {user_player}. Если вы желаете сыграть еще '
+                                           f'-- введите команду "/игры".')
         await self.db_edit(user_player, 'empty')
 
     async def db_edit(self, user_id, status, channel='None'):
         # функция заносит игрока в базу данных, или изменяет статус, если он там уже есть.
         cur = self.con.cursor()
         # на сервере идентификатор содержит #, а в личных сообщениях нет. Не даем дублировать записи.
-        user_id = user_id.replace('#', '')
         user = cur.execute("Select * from users WHERE user_id=?", (user_id,)).fetchone()
         if user is None:
             cur.execute('INSERT INTO users(user_id, state, channel) VALUES(?, ?, ?)', (str(user_id), status, channel))
@@ -529,8 +539,8 @@ class Fraudbot(discord.Client):
         users = cur.execute("Select * from users").fetchall()
         for i in users:
             cur.execute('UPDATE users SET state = "empty", channel = "None" WHERE user_id = "' + str(i[0]) + '"')
+            self.reconnect[i[0]] = True
         self.con.commit()
-        self.reconnect = True
 
     async def on_member_join(self, member):
         # отправляем новому на сервере пользователю сообщение.
