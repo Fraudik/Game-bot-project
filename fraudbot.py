@@ -89,13 +89,12 @@ class Bnc:
 class Fraudbot(discord.Client):
     def __init__(self, **options):
         super().__init__(**options)
-        # в базе хранятся данные о пользователях, user_id, points, state.
-        # Первое это идентификатор, второе это очки, а третье - то, чем сейчас занимается бот с игроками.
+        # в базе хранятся данные о пользователях
         self.con = sqlite3.connect("users.db")
-        # это все игры, которые доступны, в формате: команду на вызов игры - описание игры
+        # это все игры, которые доступны, в формате: команда на вызов игры - описание игры
         games = '/быки и коровы - математическая игра, в двух изданиях: в одиночку и против бота\n' \
                 '/камень-ножницы-бумага - классические камень-ножницы-бумага, с самообучающимся ботом\n' \
-                '/кости - вы делаете ставки на сумму выброшенных ботом костей\n\n' \
+                '/кости - вы делаете ставки на сумму выброшенных ботом костей. Внимание, требует расчетов.\n\n' \
                 'Более подробные правила игр описаны внутри каждой из них. Пусть Фортуна будет благосклонна' \
                 ' к вам!'
         # это база откуда мы будем брать реакции на разные фразы.
@@ -104,7 +103,7 @@ class Fraudbot(discord.Client):
                                        ' где используется математическое мышление. Команда "/игры" -- '
                                        'здесь описаны мои игры и команды для их вызова.\nКоманда "/помощь" -- '
                                        'используйте ее, если возникнут вопросы или проблемы.',
-                            '/помощь': 'Если у вас возник вопрос, проблема, или у вас есть какая-то идея'
+                            '/помощь': 'Если у вас возник вопрос, проблема или идея'
                                        ' -- пишите на адрес fraudbot.help@mail.ru'}
         self.commands = ['/помощь', '/игры', '/привет'] + [g.split(' - ')[0] for g in games.split('\n')]
         # после перезапуска бот должен будет предупредить пользователей, что все их диалоги были прекращены.
@@ -126,8 +125,7 @@ class Fraudbot(discord.Client):
             user_chan_guild = str(user_channel.guild.id) + str(user_channel.id)
         except AttributeError:
             user_chan_guild = str(user_channel.id)
-        # прекращает все взаимодействия с ботом по команде (на другом сервере или канале, а также
-        # в случае изменения id канала)
+        # прекращает все взаимодействия с ботом по команде (на другом сервере или канале)
         if message.content == '/стоп' and self.user_status(user_player, get_channel=True) != "none" and \
                 str(int(self.user_status(user_player, get_channel=True))) != user_chan_guild:
             await self.db_edit(user_player, 'empty')
@@ -141,15 +139,17 @@ class Fraudbot(discord.Client):
         # если пользователя нет в базе
         if self.user_status(user_player) == 'none':
             # поприветствуем нового пользователя и добавим его в базу. Добавление в базу происходит автоматически,
-            await message.channel.send(f'Приветствую, {user_player}! Я Fraudbot и у меня 3 основных команды:\n\t/'
-                                       f'привет\t|\t/игры\t|\t/помощь\nВы можете отправить любую из них. Более '
-                                       f'подробное приветствие уже отправлено вам в личные сообщения.')
-            # также отправляем ему сообщение в личный канал.
+            # если пользователь написал в личные сообщения боту, то приветствуем только один раз.
+            if not type(message.channel) == discord.DMChannel:
+                await message.channel.send(f'Приветствую, {user_player}! Я Fraudbot и у меня 3 основных команды:\n\t/'
+                                           f'привет\t|\t/игры\t|\t/помощь\nВы можете отправить любую из них. Более '
+                                           f'подробное приветствие уже отправлено вам в личные сообщения.')
+            # также отправляем ему сообщение в личный канал
             await self.pm_greet(user_gambler)
             # вместе со сменой статуса в конце функции. Но пользователь мог первым сообщением сразу отправить команду
             # и поэтому статус меняется перед проверкой на то, что сообщение является командой.
             await self.db_edit(user_player, 'empty')
-        # если пользователь "свободен" от наших игр или диалога
+        # если пользователь "свободен" от игр
         if self.user_status(user_player) == 'empty':
             for i in self.dialog_base:
                 if message.content == i:
@@ -170,7 +170,7 @@ class Fraudbot(discord.Client):
             # проверяет, что точно сообщение от нашего игрока и что он не случайно нажал enter
             # также не дает случиться путанице с множеством каналов.
             return len(m.content) != 0 and m.author == user_gambler and m.channel == user_channel
-        # запуск игры "Быки и Коровы>"
+        # запуск игры "Быки и коровы>"
         if message.content == '/быки и коровы':
             await self.db_edit(message.author.name + message.author.discriminator, 'bnc', user_chan_guild)
             # это нужно, чтобы отслеживать сообщения именно от данного пользователя
@@ -440,7 +440,7 @@ class Fraudbot(discord.Client):
                     # те наборы кубиков, которые буду предоставлены игроку в этот раз.
                     cur_set = [random.choice([d for d in dash_set.keys()]) for _ in range(2)]
                     for i in range(len(cur_set)):
-                        # устранение и замена дупликатов.
+                        # устранение и замена дубликатов.
                         while cur_set.count(cur_set[i]) > 1:
                             del cur_set[i]
                             cur_set.append(random.choice([d for d in dash_set.keys()]))
@@ -521,6 +521,7 @@ class Fraudbot(discord.Client):
                     await message.channel.send(f'Поздравляю, {user_player}, вы победили!')
             await message.channel.send(f'Игра окончена, {user_player}. Если вы желаете сыграть еще '
                                        f'-- введите команду "/игры".')
+        # запуск игры "Камень-ножницы-бумага"
         elif message.content == '/камень-ножницы-бумага':
             # изменение статуса
             await self.db_edit(message.author.name + message.author.discriminator, 'rsp', user_chan_guild)
@@ -535,7 +536,7 @@ class Fraudbot(discord.Client):
                                                                   '/стоп')
             # ввод
             choice = await self.wait_for('message', check=check)
-            # переводит ввод в нижний регистр на случай капсаю и проверяем.
+            # переводит ввод в нижний регистр на случай капса и проверяет.
             while choice.content.lower() not in ('да', '/стоп') and self.user_status(user_player) != 'empty':
                 await message.channel.send(user_player + ', чтобы ответить,'
                                                          ' введите один из следующих вариантов:\n\tда\n\t/стоп')
@@ -566,7 +567,7 @@ class Fraudbot(discord.Client):
                 best_choice = {}
                 # список всех фигур, для вывода.
                 figures = [key for key in dominates.keys()]
-                # реузльтат предыдущего хода мы будем записывать сюда и отправлять пользователю вместе с
+                # результат предыдущего хода мы будем записывать сюда и отправлять пользователю вместе с
                 # предложением ввода. это сделано из-за того, что иначе может вознинкуть задержка.
                 result = ''
                 # цикл игры
@@ -577,7 +578,8 @@ class Fraudbot(discord.Client):
                                                              ' команду "/стоп".')
                     move = await self.wait_for('message', check=check)
                     player_move = move.content.lower()
-                    if len(player_move) > 1:
+                    # если пользователь все же ввел полное название фигуры
+                    if len(player_move) > 1 and player_move != '/стоп':
                         player_move = player_move[0]
                     # в качестве ввода берет первую букву. также переводит ввод в нижний регистр на случай капслока.
                     while player_move not in ('к', 'б', 'н', '/стоп') and self.user_status(user_player)\
@@ -588,7 +590,7 @@ class Fraudbot(discord.Client):
                                                                  'команду "/стоп".')
                         move = await self.wait_for('message', check=check)
                         player_move = move.content.lower()
-                        if len(player_move) > 1:
+                        if len(player_move) > 1 and player_move != '/стоп':
                             player_move = player_move[0]
                     if player_move == '/стоп' or self.user_status(user_player) == 'empty':
                         break
@@ -603,7 +605,7 @@ class Fraudbot(discord.Client):
                             while length > 0:
                                 # последние сделанные игроком ходы.
                                 last_moves = list(reversed(play_history[:-(length + 1):-1]))
-                                # влгоритм ищет, когда он делал такие же ходы
+                                # алгоритм ищет, когда он делал такие же ходы
                                 for moves in range(1, len(play_history[length:-(length - 1):length]) + 1):
                                     moves *= length
                                     # и если находит, то ищет какой ход он делал после этого чаще всего.
@@ -667,8 +669,8 @@ class Fraudbot(discord.Client):
             return user[2]
         return user[1]
 
-    async def on_ready(self):
-        # при перезапуске все статусы сбрасываются, а при первом запуске ничего не просходит,
+    async def on_connect(self):
+        # при перезапуске все статусы сбрасываются, а при первом запуске ничего не происходит,
         # так как в базе нет пользователей.
         cur = self.con.cursor()
         users = cur.execute("Select * from users").fetchall()
@@ -686,8 +688,7 @@ class Fraudbot(discord.Client):
         if self.user_status(str(member)) == 'none':
             await member.create_dm()
             await member.dm_channel.send(self.dialog_base['/привет'])
-            await member.dm_channel.send('Вы можете общаться со мной как на общем канале, так и здесь. Eще у меня'
-                                         ' есть команда "/помощь". Отправьте ее мне, если понадобится помощь.')
+            await member.dm_channel.send('Вы можете общаться со мной как на общем канале, так и здесь.')
 
 
 client = Fraudbot()
