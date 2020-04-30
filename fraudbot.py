@@ -415,13 +415,13 @@ class Fraudbot(discord.Client):
                     bet = await self.wait_for('message', check=check)
                     while True:
                         try:
-                            if max(1, bot_cash) <= int(bet.content) <= min(20, player_cash) or\
+                            if min(1, bot_cash) <= int(bet.content) <= min(20, player_cash) or\
                                     self.user_status(user_player) == 'empty':
                                 break
                             raise ValueError
                         except ValueError:
                             await message.channel.send(f'{user_player}, сделайте ставку, указав одну цифру от'
-                                                       f' {max(1, bot_cash)} до {min(20, player_cash)} или остановите '
+                                                       f' {min(1, bot_cash)} до {min(20, player_cash)} или остановите '
                                                        f'игру командой "/стоп".')
                             bet = await self.wait_for('message', check=check)
                     if bet.content == '/стоп' or self.user_status(user_player) == 'empty':
@@ -626,7 +626,8 @@ class Fraudbot(discord.Client):
                     move = await self.wait_for('message', check=check)
                     player_move = move.content.lower()
                     # если пользователь все же ввел полное название фигуры
-                    if len(player_move) > 1 and player_move != '/стоп':
+                    if len(player_move) > 1 and player_move != '/стоп' and player_move.lower() \
+                            in ('камень', 'ножницы', 'бумага'):
                         player_move = player_move[0]
                     # в качестве ввода берет первую букву. также переводит ввод в нижний регистр на случай капслока.
                     while player_move not in ('к', 'б', 'н', '/стоп') and self.user_status(user_player)\
@@ -637,38 +638,38 @@ class Fraudbot(discord.Client):
                                                                  'команду "/стоп".')
                         move = await self.wait_for('message', check=check)
                         player_move = move.content.lower()
-                        if len(player_move) > 1 and player_move != '/стоп':
+                        if len(player_move) > 1 and player_move.lower() in ('камень', 'ножницы', 'бумага')\
+                                and player_move != '/стоп':
                             player_move = player_move[0]
                     if player_move == '/стоп' or self.user_status(user_player) == 'empty':
                         break
+                    bot_try = ''
+                    if len(play_history) < 3:
+                        # не важно, какую фигуру выбрать, так как бот выбирает ее случайно.
+                        bot_try = dominates[random.choice(figures)]
                     else:
-                        play_history.append(player_move)
-                        if len(play_history) < 5:
-                            # не важно, какую фигуру выбрать, так как бот выбирает ее случайно.
-                            bot_try = dominates[random.choice(figures)]
-                        else:
-                            # сначала алгоритм ищет все совпадения длиной 4, затем 3, 2 и наконец 1.
-                            length = 4
-                            while length > 0:
-                                # последние сделанные игроком ходы.
-                                last_moves = list(reversed(play_history[:-(length + 1):-1]))
-                                # алгоритм ищет, когда он делал такие же ходы
-                                for moves in range(1, len(play_history[length:-(length - 1):length]) + 1):
-                                    moves *= length
-                                    # и если находит, то ищет какой ход он делал после этого чаще всего.
-                                    if last_moves == play_history[moves - length:moves]:
-                                        # алгоритм предпочитает смотреть на более длинные последовательности, не
-                                        # рассматривая после них более короткие.
-                                        length = 0
-                                        # записывает последний ход в словарь, или увеличивает количество раз,
-                                        # когда его сделал игрок.
-                                        last_move = play_history[moves - 1]
-                                        if last_move in best_choice:
-                                            best_choice[last_move] += 1
-                                        else:
-                                            best_choice[last_move] = 1
-                                # если не нашли таких повторений, то уменьшает длину выборки.
-                                length -= 1
+                        # сначала алгоритм ищет все совпадения длиной 4, затем 3, 2 и наконец 1.
+                        length = 4
+                        while length > 0:
+                            # последние сделанные игроком ходы.
+                            last_moves = list(reversed(play_history[:-(length + 1):-1]))
+                            # алгоритм ищет, когда он делал такие же ходы
+                            for moves in range(1, len(play_history[length:-(length - 1):length]) + 1):
+                                moves *= length
+                                # и если находит, то ищет какой ход он делал после этого чаще всего.
+                                if last_moves == play_history[moves - length:moves]:
+                                    # алгоритм предпочитает смотреть на более длинные последовательности, не
+                                    # рассматривая после них более короткие.
+                                    length = 0
+                                    # записывает последний ход в словарь, или увеличивает количество раз,
+                                    # когда его сделал игрок.
+                                    last_move = play_history[moves]
+                                    if last_move in best_choice:
+                                        best_choice[last_move] += 1
+                                    else:
+                                        best_choice[last_move] = 1
+                            # если не нашли таких повторений, то уменьшает длину выборки.
+                            length -= 1
                             # если игрок повторился, то отвечает фигурой, которая выиграет у фигуры, которую он обычно
                             # показывал на следующий ход.
                             if len(best_choice) != 0:
@@ -677,13 +678,15 @@ class Fraudbot(discord.Client):
                             else:
                                 bot_try = dominates[random.choice(figures)]
                             best_choice.clear()
-                        # определяет кто победил
-                        if dominates[player_move] == bot_try:
-                            bot_wins += 1
-                        elif weaknesses[bot_try] == player_move:
-                            user_wins += 1
-                        # показывает выбранную фигуру и счет
-                        result = f'{user_player}, {bot_try}\nМой счет: {bot_wins}\tСчет {user_player}: {user_wins}'
+                    # добавляет ход в историю
+                    play_history.append(player_move)
+                    # определяет кто победил
+                    if dominates[player_move] == bot_try:
+                        bot_wins += 1
+                    elif weaknesses[bot_try] == player_move:
+                        user_wins += 1
+                    # показывает выбранную фигуру и счет
+                    result = f'{user_player}, {bot_try}\nМой счет: {bot_wins}\tСчет {user_player}: {user_wins}'
                 if bot_wins > user_wins:
                     await message.channel.send(f'{user_player}\nБот выиграл со счетом {bot_wins} - {user_wins}')
                 elif bot_wins < user_wins:
@@ -691,8 +694,9 @@ class Fraudbot(discord.Client):
                 else:
                     await message.channel.send(user_player + '\nНичья!')
                 await message.channel.send('Спасибо за игру!')
-        await message.channel.send(f'Игра окончена, {user_player}. Если вы желаете сыграть еще '
-                                   f'-- введите команду "/игры".')
+        if self.user_status(user_player) != 'empty':
+            await message.channel.send(f'Игра окончена, {user_player}. Если вы желаете сыграть еще '
+                                       f'-- введите команду "/игры".')
         await self.db_edit(user_player, 'empty')
 
     async def db_edit(self, user_id, status, channel='none'):
