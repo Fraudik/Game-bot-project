@@ -92,9 +92,9 @@ class Fraudbot(discord.Client):
         # в базе хранятся данные о пользователях
         self.con = sqlite3.connect("users.db")
         # это все игры, которые доступны, в формате: команда на вызов игры - описание игры
-        games = '/быки и коровы - математическая игра, в двух изданиях: в одиночку и против бота\n' \
-                '/камень-ножницы-бумага - классические камень-ножницы-бумага, с самообучающимся ботом\n' \
-                '/кости - вы делаете ставки на сумму выброшенных ботом костей. Внимание, требует расчетов.\n\n' \
+        games = '/быки и коровы - математическая игра, в двух изданиях: в одиночку и против бота. Имеет две вариаци' \
+                'и.\n/камень-ножницы-бумага - классические камень-ножницы-бумага, с самообучающимся ботом.\n' \
+                '/кости - вы делаете ставки на сумму выброшенных ботом костей. Имеет две вариации.\n\n' \
                 'Более подробные правила игр описаны внутри каждой из них. Пусть Фортуна будет благосклонна' \
                 ' к вам!'
         # это база откуда мы будем брать реакции на разные фразы.
@@ -374,153 +374,200 @@ class Fraudbot(discord.Client):
                 if playing != -1:
                     await message.channel.send('Спасибо за игру! Если вы желаете еще поиграть --'
                                                ' введите команду "/игры".')
-            await message.channel.send(f'Игра окончена, {user_player}. Если желаете еще раз сыграть в эту или'
-                                       f' иную игру -- введите команду "/игры".')
         # запуск игры "Кости"
         elif message.content == '/кости':
+            random.seed(random.randint(10 ** 10, 10 ** 20))
+            # все возможные результаты бросков для разных наборов костей.
+            values = {'один шестигранник': range(1, 7),
+                      'два шестигранника': range(2, 13),
+                      'один восьмигранник': range(1, 9),
+                      'два восьмигранника': range(2, 17),
+                      'один двадцатигранник': range(1, 21)}
             # изменение статуса.
             await self.db_edit(message.author.name + message.author.discriminator, 'dices', user_chan_guild)
             # объяснение правил игры
-            await message.channel.send('Хорошо, ' + user_player + '! Правила таковы -- у вас ровно 100 монет. Вам нужно'
-                                                                  ' увеличить их количество. На каждый бросок можно с'
-                                                                  'делать ставку, от 5 до 20 монет. Ставка делается '
-                                                                  'на сумму цифр, которые будет на верхн(их/ей) гран(я'
-                                                                  'х/и) кост(ей/и) после броска. Также вы можете '
-                                                                  'выбрать какие кости будете бросать. Кости каждый р'
-                                                                  'аз выбираются случайно, из следующих вариантов:'
-                                                                  '\n\tодна шестигранная кость, коэффициент ставки - 3.'
-                                                                  '\n\tдве шестигранные кости коэффициент ставки - 6'
-                                                                  '\n\tодна восьмигранная кость, коэффициент ставки - '
-                                                                  '4\n\tдве восьмигранные кости, коэффициент ставки - '
-                                                                  '8\n\tодна двадцатигранная кость,'
-                                                                  ' коэффициент ставки - 10\nТакже вам всегда будет д'
-                                                                  'оступна моентка со стабильным коэффициентом 2.\n'
-                                                                  'Коэффициент ставки - это то число, на которое '
-                                                                  'будет умножена ваша ставка. При проигрыше у вас '
-                                                                  'вычтут вашу ставку. Но есть одно условие - ,'
-                                                                  ' все коэффициенты, кроме стабильного, варируются'
-                                                                  ' от 2 до самих себя.\nЕсли вы будете'
-                                                                  ' играть, то выберите число, которого хотите '
-                                                                  'достигнуть, из нижеперечисленных. В противном случ'
-                                                                  'ае, напишите команду "/стоп"\n'
-                                                                  '200  |  300  |  500  |  1000  |  /стоп')
-            choice = await self.wait_for('message', check=check)
-            # проверка на правильный ввод
-            while choice.content not in ('200', '300', '/стоп', '500', '1000') and self.user_status(user_player)\
-                    != 'empty':
-                await message.channel.send(user_player + ', чтобы ответить,'
-                                                         ' введите один из следующих вариантов: \n200\n300\n500\n100'
-                                                         '0\n/стоп')
-                choice = await self.wait_for('message', check=check)
-            if choice.content == '/стоп' or self.user_status(user_player) == 'empty':
+            await message.channel.send('Хорошо, ' + user_player + '! Выберите режим игры: простая игра в кости против'
+                                                                  ' бота или одиночная игра, но усложненная.\n'
+                                                                  ' Внимение, второй вариант требует расчетов.\n\t1\t|'
+                                                                  '\t2\t|\t/стоп')
+            variation = await self.wait_for('message', check=check)
+            while variation.content not in ('1', '2', '/стоп') and self.user_status(user_player) != 'empty':
+                await message.channel.send(user_player + ', чтобы ответить,введите один из следующих вариантов:\n1'
+                                                         ' -- для простой игры против бота\n2 -- для усложненной'
+                                                         ' одиночной игры\n/стоп -- чтобы отказаться от игры')
+                variation = await self.wait_for('message', check=check)
+            if variation.content == '/стоп' or self.user_status(user_player) == 'empty':
                 # игрок отказался играть. В конце блока игры его статус автоматически поменяется.
                 pass
-            else:
-                start_cash = 100
-                end_cash = int(choice.content)
-                # начальные и стартовые суммы, словарь названий костей и их коэффициентов.
-                dash_set = {'один шестигранник': 3,
-                            'два шестигранника': 6,
-                            'один восьмигранник': 4,
-                            'два восьмигранника': 8,
-                            'один двадцатигранник': 10}
-                # все возможные результаты бросков для разных наборов костей.
-                values = {'один шестигранник': range(1, 7),
-                          'два шестигранника': range(2, 13),
-                          'один восьмигранник': range(1, 9),
-                          'два восьмигранника': range(2, 17),
-                          'один двадцатигранник': range(1, 21),
-                          'монета': range(1, 3)}
-                # использовалась ли монета в прошлый раз.
-                d2_used = False
-                # пока игрок не проиграет, или не выиграет.
-                while 0 < start_cash < end_cash:
-                    # экспериментальным путем было определено, что именно такая генерация
-                    random.seed(random.randint(10 ** 10, 10 ** 20))
-                    # те наборы кубиков, которые буду предоставлены игроку в этот раз.
-                    cur_set = [random.choice([d for d in dash_set.keys()]) for _ in range(2)]
-                    for i in range(len(cur_set)):
-                        # устранение и замена дубликатов.
-                        while cur_set.count(cur_set[i]) > 1:
-                            del cur_set[i]
-                            cur_set.append(random.choice([d for d in dash_set.keys()]))
-                        cur_set[i] = f'{i + 1}){cur_set[i]} -- {str(random.randint(2, dash_set[cur_set[i]]))}'
-                    if not d2_used:
-                        cur_set.append('3)монета -- 2')
-                    else:
-                        d2_used = False
-                    await message.channel.send(user_player + f'. Ваши монеты: {start_cash}, осталось набрать ещё '
-                                                             f'{end_cash - start_cash} монет.\n Вы можете кинуть '
-                                                             f'следующие кости:\n\t' + '\n\t'.join(cur_set)
-                                               + '\nМожно ввести или наименование варианта, или его номер.')
-                    user_move = await self.wait_for('message', check=check)
-                    # проверка на правильный ввод.
-                    while all([user_move.content != c.split(' -- ')[0][2:] for
-                               c in cur_set]) and user_move.content not in ['1', '2', '3'] + ['/стоп'] and \
-                            self.user_status(user_player) != 'empty':
-                        await message.channel.send(user_player + ', чтобы ответить, введите наименование одного из'
-                                                                 ' следующих вариантов:\n\t' + '\n\t'.join(cur_set) +
-                                                   '\nили номер варианта, от 1 до 3.\nТакже вы можете прервать игру'
-                                                   ' командой "/стоп"')
-                        user_move = await self.wait_for('message', check=check)
-                    dice = user_move.content
-                    if dice == '/стоп' or self.user_status(user_player) == 'empty':
-                        break
-                    if dice not in ['1', '2', '3']:
-                        # если было указано наименование, то узнаем его номер.
-                        dice = str([d.split(' -- ')[0][2:] == dice for d in cur_set].index(True) + 1)
-                    if dice == '3':
-                        d2_used = True
-                    coefficient = int(cur_set[int(dice) - 1][-1])
-                    await message.channel.send(user_player + ', теперь выберите число, на которое будете делать ставку.'
-                                                             ' Число не может превышать максимальную сумму цифр костей'
-                                                             ', или быть меньше 1 (или 2 если костей две).')
-                    digit = await self.wait_for('message', check=check)
-                    # получаем все числа, на которые можно делать ставки.
-                    sums = [str(b) for b in values[cur_set[int(dice) - 1].split(' -- ')[0][2:]]]
-                    # проверяем ввод
-                    while digit.content not in sums and digit.content != '/стоп' and self.user_status(user_player) \
-                            != 'empty':
-                        await message.channel.send(user_player + ', выберите число, на которое будете делать ставку.'
-                                                                 ' Введите любое число из следуюших:  ' +
-                                                   ',  '.join(sums) + '\nТакже вы можете прервать игру командой '
-                                                                      '"/стоп"')
-                        digit = await self.wait_for('message', check=check)
-                    if digit.content == '/стоп' or self.user_status(user_player) == 'empty':
-                        break
-                    await message.channel.send(f'Отлично, {user_player}, а теперь введите ставку. Ставкой может быть '
-                                               f'любое число от 5 до 20 включительно.')
+            elif variation.content == '1':
+                # одиночная игра
+                await message.channel.send(f'Вы сделали выбор, {user_player}. Здесь правила просты. И у вас, и у бота'
+                                           f' по 100 монет. Каждый раунд выбирается один случайный тип костей. Затем'
+                                           f' вы делаете ставку от 1 до 20 монет на то, что число, которые вы выбросите'
+                                           f' с помощью этих костей будет больше чем то, которое выбросит бот.')
+                player_cash = 100
+                bot_cash = 100
+                while bot_cash != 0 and player_cash != 0:
+                    # выбор типа костей
+                    dice = random.choice([v for v in values.keys()])
+                    await message.channel.send(f'{user_player}, в этом раунде вы бросаете {dice}.\nСделайте ставку'
+                                               f' (от 1 до 20 монет, не больше оставшихся у вас или бота монет)')
                     bet = await self.wait_for('message', check=check)
-                    # проверяем корректность ставки. Существует возможность сделать ставку и уйти в минус,
-                    # в полном соответствии с правилами игры, которые были предоставлены пользователю.
-                    while bet.content not in [str(b) for b in range(5, 21)] and bet.content != '/стоп' \
-                            and self.user_status(user_player) != 'empty':
-                        await message.channel.send(user_player + ', введите ставку. Ставкой может быть любое число из'
-                                                                 ' следующих: ' + ', '.join([str(g) for g in
-                                                                                             range(5, 21)]))
-                        bet = await self.wait_for('message', check=check)
+                    while True:
+                        try:
+                            if max(1, bot_cash) <= int(bet.content) <= min(20, player_cash) or\
+                                    self.user_status(user_player) == 'empty':
+                                break
+                            raise ValueError
+                        except ValueError:
+                            await message.channel.send(f'{user_player}, сделайте ставку, указав одну цифру от'
+                                                       f' {max(1, bot_cash)} до {min(20, player_cash)} или остановите '
+                                                       f'игру командой "/стоп".')
+                            bet = await self.wait_for('message', check=check)
                     if bet.content == '/стоп' or self.user_status(user_player) == 'empty':
                         break
-                    # бросок костей.
-                    cast = random.choice(sums)
-                    await message.channel.send(f'{user_player}, вы сделали ставку {bet.content} монет на число '
-                                               f'{digit.content}. Бот бросает кости...\nИ выбрасывает число'
-                                               f' {cast}.')
-                    if digit.content != cast:
-                        await message.channel.send(f'Жаль, {user_player}, вы не угадали и лишились {bet.content} монет.')
-                        start_cash -= int(bet.content)
-                    else:
-                        await message.channel.send(f'Вы угадали, {user_player}! Ваш выигрыш составляет '
-                                                   f'{coefficient * int(bet.content)} монет(а).')
-                        start_cash += coefficient * int(bet.content)
-                if start_cash <= 0:
-                    await message.channel.send(f'Вы проиграли, {user_player}. Но это не повод для огорчения,'
-                                               f' ведь смысл этой игры не в победах или поражениях, а в самой игре.'
-                                               f' Каждый проигрыш или победа чему-то учат.')
-                if start_cash == end_cash:
-                    await message.channel.send(f'Поздравляю, {user_player}, вы победили!')
-            await message.channel.send(f'Игра окончена, {user_player}. Если вы желаете сыграть еще '
-                                       f'-- введите команду "/игры".')
+                    player_bet = int(bet.content)
+                    player_throw, bot_throw = [random.choice(values[dice]) for _ in range(2)]
+                    if player_throw > bot_throw:
+                        player_cash += player_bet
+                        bot_cash -= player_bet
+                    elif bot_throw > player_throw:
+                        bot_cash += player_bet
+                        player_cash -= player_bet
+                    await message.channel.send(f'{user_player}\nВы выбросили {player_throw}, а бот {bot_throw}.\n'
+                                               f'Ваши монеты - {player_cash}\nМонеты бота - {bot_cash}')
+                if player_cash == 0:
+                    await message.channel.send(f'{user_player}, к сожалению, вы проиграли. Наши соболезнования.')
+                elif bot_cash == 0:
+                    await message.channel.send(f'{user_player}, поздравляю с победой! Это была хорошая игра.')
+            elif variation.content == '2':
+                await message.channel.send(f'Вы сделали выбор, {user_player}. Правила таковы -- у вас ровно 100 монет. '
+                                           f'Вам нужно увеличить их количество. На каждый бросок можно сделать ставку,'
+                                           f' от 5 до 20 монет. Ставка делается на сумму цифр, которые будет на '
+                                           f'верхн(их/ей) гран(ях/и) кост(ей/и) после броска. Также вы можете выбрать'
+                                           f' какие кости будете бросать. Кости каждый раз выбираются случайно, из '
+                                           f'следующих вариантов:\n\tодна шестигранная кость, коэффициент ставки - 3.'
+                                           f'\n\tдве шестигранные кости коэффициент ставки - 6\n\tодна восьмигранная'
+                                           f' кость, коэффициент ставки - 4\n\tдве восьмигранные кости, коэффициент '
+                                           f'ставки - 8\n\tодна двадцатигранная кость, коэффициент ставки - 10\nТакже'
+                                           f' вам всегда будет дступна моентка со стабильным коэффициентом 2.\n'
+                                           f'Коэффициент ставки - это то число, на которое будет умножена ваша ставка.'
+                                           f' При проигрыше у вас вычтут вашу ставку. Но есть одно условие - ,'
+                                           f' все коэффициенты, кроме стабильного, варируются от 2 до самих себя.\n'
+                                           f'Если вы будете  играть, то выберите число, которого хотите достигнуть,'
+                                           f' из нижеперечисленных. В противном случае, напишите команду "/стоп"\n'
+                                           f'200  |  300  |  500  |  1000  |  /стоп')
+                choice = await self.wait_for('message', check=check)
+                # проверка на правильный ввод
+                while choice.content not in ('200', '300', '/стоп', '500', '1000') and self.user_status(user_player)\
+                        != 'empty':
+                    await message.channel.send(user_player + ', чтобы ответить,'
+                                                             ' введите один из следующих вариантов: \n200\n300\n500'
+                                                             '\n1000\n/стоп')
+                    choice = await self.wait_for('message', check=check)
+                if choice.content == '/стоп' or self.user_status(user_player) == 'empty':
+                    # игрок отказался играть. В конце блока игры его статус автоматически поменяется.
+                    pass
+                else:
+                    start_cash = 100
+                    end_cash = int(choice.content)
+                    # начальные и стартовые суммы, словарь названий костей и их коэффициентов.
+                    dash_set = {'один шестигранник': 3,
+                                'два шестигранника': 6,
+                                'один восьмигранник': 4,
+                                'два восьмигранника': 8,
+                                'один двадцатигранник': 10}
+                    # в этой вариации игры есть монета, у которой всего 2 стороны.
+                    values['монета'] = range(1, 3)
+                    # использовалась ли монета в прошлый раз.
+                    d2_used = False
+                    # пока игрок не проиграет, или не выиграет.
+                    while 0 < start_cash < end_cash:
+                        # те наборы кубиков, которые буду предоставлены игроку в этот раз.
+                        cur_set = [random.choice([d for d in dash_set.keys()]) for _ in range(2)]
+                        for i in range(len(cur_set)):
+                            # устранение и замена дубликатов.
+                            while cur_set.count(cur_set[i]) > 1:
+                                del cur_set[i]
+                                cur_set.append(random.choice([d for d in dash_set.keys()]))
+                            cur_set[i] = f'{i + 1}){cur_set[i]} -- {str(random.randint(2, dash_set[cur_set[i]]))}'
+                        if not d2_used:
+                            cur_set.append('3)монета -- 2')
+                        else:
+                            d2_used = False
+                        await message.channel.send(user_player + f'. Ваши монеты: {start_cash}, осталось набрать ещё '
+                                                                 f'{end_cash - start_cash} монет.\n Вы можете кинуть '
+                                                                 f'следующие кости:\n\t' + '\n\t'.join(cur_set)
+                                                   + '\nМожно ввести или наименование варианта, или его номер.')
+                        user_move = await self.wait_for('message', check=check)
+                        # проверка на правильный ввод.
+                        while all([user_move.content != c.split(' -- ')[0][2:] for
+                                   c in cur_set]) and user_move.content not in ['1', '2', '3'] + ['/стоп'] and \
+                                self.user_status(user_player) != 'empty':
+                            await message.channel.send(user_player + ', чтобы ответить, введите наименование одного из'
+                                                                     ' следующих вариантов:\n\t' +
+                                                       '\n\t'.join(cur_set) + '\nили номер варианта, от 1 до 3.\nТакже'
+                                                                              ' вы можете прервать игру командой'
+                                                                              ' "/стоп"')
+                            user_move = await self.wait_for('message', check=check)
+                        dice = user_move.content
+                        if dice == '/стоп' or self.user_status(user_player) == 'empty':
+                            break
+                        if dice not in ['1', '2', '3']:
+                            # если было указано наименование, то узнаем его номер.
+                            dice = str([d.split(' -- ')[0][2:] == dice for d in cur_set].index(True) + 1)
+                        if dice == '3':
+                            d2_used = True
+                        coefficient = int(cur_set[int(dice) - 1][-1])
+                        await message.channel.send(user_player + ', теперь выберите число, на которое будете делать'
+                                                                 ' ставку. Число не может превышать максимальную сумму'
+                                                                 ' цифр костей, или быть меньше 1 (или 2 если костей'
+                                                                 ' две).')
+                        digit = await self.wait_for('message', check=check)
+                        # получаем все числа, на которые можно делать ставки.
+                        sums = [str(b) for b in values[cur_set[int(dice) - 1].split(' -- ')[0][2:]]]
+                        # проверяем ввод
+                        while digit.content not in sums and digit.content != '/стоп'\
+                                and self.user_status(user_player) != 'empty':
+                            await message.channel.send(user_player + ', выберите число, на которое будете делать '
+                                                                     'ставку. Введите любое число из следуюших:  ' +
+                                                       ',  '.join(sums) + '\nТакже вы можете прервать игру командой '
+                                                                          '"/стоп"')
+                            digit = await self.wait_for('message', check=check)
+                        if digit.content == '/стоп' or self.user_status(user_player) == 'empty':
+                            break
+                        await message.channel.send(f'Отлично, {user_player}, а теперь введите ставку. Ставкой может'
+                                                   f' быть любое число от 5 до 20 включительно.')
+                        bet = await self.wait_for('message', check=check)
+                        # проверяем корректность ставки. Существует возможность сделать ставку и уйти в минус,
+                        # в полном соответствии с правилами игры, которые были предоставлены пользователю.
+                        while bet.content not in [str(b) for b in range(5, 21)] and bet.content != '/стоп' \
+                                and self.user_status(user_player) != 'empty':
+                            await message.channel.send(user_player + ', введите ставку. Ставкой может быть любое число'
+                                                                     ' из следующих: ' + ', '.join([str(g) for g in
+                                                                                                    range(5, 21)]))
+                            bet = await self.wait_for('message', check=check)
+                        if bet.content == '/стоп' or self.user_status(user_player) == 'empty':
+                            break
+                        # бросок костей.
+                        cast = random.choice(sums)
+                        await message.channel.send(f'{user_player}, вы сделали ставку {bet.content} монет на число '
+                                                   f'{digit.content}. Бот бросает кости...\nИ выбрасывает число'
+                                                   f' {cast}.')
+                        if digit.content != cast:
+                            await message.channel.send(f'Жаль, {user_player}, вы не угадали и лишились {bet.content}'
+                                                       f' монет.')
+                            start_cash -= int(bet.content)
+                        else:
+                            await message.channel.send(f'Вы угадали, {user_player}! Ваш выигрыш составляет '
+                                                       f'{coefficient * int(bet.content)} монет(а).')
+                            start_cash += coefficient * int(bet.content)
+                    if start_cash <= 0:
+                        await message.channel.send(f'Вы проиграли, {user_player}. Но это не повод для огорчения,'
+                                                   f' ведь смысл этой игры не в победах или поражениях, а в самой'
+                                                   f' игре. Каждый проигрыш или победа чему-то учат.')
+                    if start_cash == end_cash:
+                        await message.channel.send(f'Поздравляю, {user_player}, вы победили!')
         # запуск игры "Камень-ножницы-бумага"
         elif message.content == '/камень-ножницы-бумага':
             # изменение статуса
@@ -644,7 +691,8 @@ class Fraudbot(discord.Client):
                 else:
                     await message.channel.send(user_player + '\nНичья!')
                 await message.channel.send('Спасибо за игру!')
-            await message.channel.send('Если пожелаете сыграть, отправьте команду "/игры"!')
+        await message.channel.send(f'Игра окончена, {user_player}. Если вы желаете сыграть еще '
+                                   f'-- введите команду "/игры".')
         await self.db_edit(user_player, 'empty')
 
     async def db_edit(self, user_id, status, channel='none'):
