@@ -67,23 +67,25 @@ class Bnc:
                         if self.bulls_n_cows(i[0], new_answer) != [i[1], i[2]]:
                             score = 0
                             error = False
+                            # если он не подошел один раз, то он уже не подойдет никогда.
+                            self.everything.remove(new_answer)
                             break
                         error = False
                 else:
                     break
             bulls, cows = self.bulls_n_cows(new_answer, player_try)
             score -= bulls * 3 + cows
-            # 0 быков и 0 коров это плохо, так как позволяет игроку "выкинуть" все 4 названные цифры.
             if bulls + cows == 0:
                 score -= 5.1
-            # это уникальный вариант, когда 3 коровы = 1 быку. но 1 бык выгоднее и мы добавляем ему 1.
-            if cows == 0 and bulls == 1:
-                score += 1
+            elif cows == 3:
+                score -= 1
+            elif bulls + cows == 1:
+                score -= 1
             # выбираем лучший вариант.
             if max_score < score:
                 best_answer = new_answer
                 max_score = score
-        return best_answer
+        self.answer = best_answer
 
 
 class Fraudbot(discord.Client):
@@ -176,7 +178,7 @@ class Fraudbot(discord.Client):
             # это нужно, чтобы отслеживать сообщения именно от данного пользователя
             await message.channel.send('Хорошо, ' + user_player + '!\nУгадывающий называет число, а '
                                                                   'загадывающий специальным образом отвечает, '
-                                                                  'сколько цифр совпало с ответом.\nЕсли в назван'
+                                                                  'сколько цифр совпало с ответом.\nЕсли в назва'
                                                                   'ном числе цифра какого-то раз'
                                                                   'ряда совпала с цифрой в том же разряде правил'
                                                                   'ьного ответа, '
@@ -248,8 +250,8 @@ class Fraudbot(discord.Client):
                         break
                     bulls_count, cows_count = Bnc.bulls_n_cows(user_input, answer)
                     bulls, cows = Bnc.bulls_n_cows_morph(bulls_count, cows_count)
-                    await message.channel.send(user_player + f"\n{number} попытка. Ваше число {user_input}."
-                                                             f" У вас {bulls} и {cows}.")
+                    await message.channel.send(f"{user_player}\n{number} попытка. Ваше число {user_input}."
+                                               f" У вас {bulls} и {cows}.")
                     if bulls_count == 4:
                         win = True
                         break
@@ -263,6 +265,8 @@ class Fraudbot(discord.Client):
                                                                                       ' всего за ' + str(number)
                                                + ' ' +
                                                morph.parse('попытку')[0].make_agree_with_number(number).word + '.')
+                else:
+                    await message.channel.send(f'Это было число {answer}, {user_player}.')
             else:
                 await message.channel.send(user_player + ', вы играете против бота. Для того, чтобы решить,'
                                                          ' кто будет ходить первым, бот использует бинарную'
@@ -301,10 +305,9 @@ class Fraudbot(discord.Client):
                         if user_input == '/стоп' or self.user_status(user_player) == 'empty':
                             playing = -1
                             break
-                        bulls_count, cows_count = game.bulls_n_cows(user_input, game.answer)
-                        # считаем быков и коров, и, если они подходят под условие, генерируем число заново,
-                        # в связи с историей попыток.
-                        if bulls_count >= 2 or cows_count >= 3 or bulls_count + cows_count in (4, 0):
+                        bulls, cows = game.bulls_n_cows(user_input, game.answer)
+                        # генерируем число заново, в связи с историей попыток.
+                        if bulls >= 2 or cows >= 3 or bulls + cows in (4,  0):
                             game.cheat(user_input)
                         bulls_count, cows_count = game.bulls_n_cows(user_input, game.answer)
                         # добавляем в историю попытку и ее результаты
@@ -345,7 +348,7 @@ class Fraudbot(discord.Client):
                                 playing = -1
                                 break
                             await message.channel.send(user_player + ', введите через пробел количество'
-                                                                     ' "быков" и "коров".\nЕсли в названном числе '
+                                                                     ' "быков" и "коров".\nЕсли в названом числе '
                                                                      'цифра какого-то разряда совпала с цифрой'
                                                                      ' в том же разряде правильного ответа, эт'
                                                                      'о называется "быком". Если указанная циф'
@@ -367,8 +370,8 @@ class Fraudbot(discord.Client):
                                                                  f" {guess}. У меня {bulls} и {cows}.")
                         if bulls_n_cows[0] == 4:
                             # бот победил
-                            await message.channel.send('Бот победил, ' + user_player + '! Вы загадали число '
-                                                       + str(guess))
+                            await message.channel.send(f'Бот победил, {user_player}! Вы загадали число {guess}'
+                                                       f'\nА моим числом было {game.answer}!')
                             playing = 2
                         player_turn = True
                 if playing != -1:
@@ -416,7 +419,7 @@ class Fraudbot(discord.Client):
                     while True:
                         try:
                             if min(1, bot_cash) <= int(bet.content) <= min(20, player_cash) or\
-                                    self.user_status(user_player) == 'empty':
+                                    self.user_status(user_player) == 'empty' or bet.content == '/стоп':
                                 break
                             raise ValueError
                         except ValueError:
@@ -650,7 +653,7 @@ class Fraudbot(discord.Client):
                     else:
                         # сначала алгоритм ищет все совпадения длиной 4, затем 3, 2 и наконец 1.
                         length = 4
-                        while length > 0:
+                        while length > 1:
                             # последние сделанные игроком ходы.
                             last_moves = list(reversed(play_history[:-(length + 1):-1]))
                             # алгоритм ищет, когда он делал такие же ходы
